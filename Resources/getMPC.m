@@ -118,7 +118,8 @@ end
 Bb = Bb{1};
 
 Qb = sparse(p*N,p*N);
-Qb(1:p*(N-1),1:p*(N-1)) = bdiag(Q,N-1); Qb(end-p+1:end,end-p+1:end) = QN;
+Qb(1:p*(N-1),1:p*(N-1)) = bdiag(Q,N-1); 
+Qb(end-p+1:end,end-p+1:end) = QN;
 Cb = bdiag(C,N);
 Rb = bdiag(R,N);
 

@@ -154,7 +154,7 @@ end
 
 if(isequal(solver,'qpoases'))
     [res,optval,flag,iter,lambda,auxOutput] = qpOASES( (H+H')/2,f,Aineq,Ulb(:),Uub(:),[],bineq);
-    optval = optval + x0'*Q*x0;
+    %optval = optval + x0'*Q*x0;
     if (flag == -2)
         optval = Inf;
     end
