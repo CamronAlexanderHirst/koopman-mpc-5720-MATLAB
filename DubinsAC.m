@@ -3,19 +3,51 @@ close all
 addpath('./Resources')
 rng(2141444)
 
+%% TODO: Add some more commenting here!
+%%%%%%%%%%%%%%%%%%%%%%%%%%% Data collection parameters
 
+Nsim = 10;                    % # of simulations
+Ntraj = 50;                   % # of steps in each simulation
+heading_sample_range = 1;     % +/- this range
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%% Basis functions
+
+% Problem -- try out other rbs, with 'invquad', 'gauss', 'polyharmonic' -- 
+% Can also try combos of these -- can you find a basis that gives the
+% best results?
+
+% Basis Function Definitions
+n = 3;                                % Dimension of system (do not change)
+% RBF 1 Centers
+Nrbf = 1;                             % # of basis functions
+cent = rand(n,Nrbf)*2 - 1;            % centers of each function
+rbf_type = 'invquad'; 
+
+% RBF 2 Centers
+Nrbf2 = 0;                            % # of basis functions
+cent2 = rand(n,Nrbf2)*2 - 1;          % centers of each function
+rbf_type_2 = 'thinplate';             % type of function - one of 'thinplate', 'gauss', 'invquad', 'polyharmonic'
+
+% Lifting mapping - RBFs + the state itself
+extra_param = 1;
+liftFun = @(xx)( [xx; rbf(xx(3,:),cent,rbf_type); rbf(xx(3,:), cent2,rbf_type_2, extra_param);]);
+Nlift = (Nrbf + Nrbf2) + n;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%% Simulation Parameters
+% Simulation Results
+Tmax = 30;                   % Max Timestep
+
+% Once you have a good approximation, try changing the intial heading to pi
+% -- what happens? Can you fix it?
+x0 = [5.; 2.; 0.];       % Initial Condition (North / East / Heading)  
+        
 %% *************************** Dynamics ***********************************
-
-u = 0.;
 v = 1.;
 % Assume zero control input
 f_u =  @(t,x,u)([ v*cos(x(3,:)) ; v*sin(x(3,:)) ; u ] );
 
-X0 = [0.; 0.; 0.];
-
 n = 3;
 m = 1; % number of control inputs
-
 
 %% ************************** Discretization ******************************
 
@@ -29,30 +61,17 @@ f_ud = @(t,x,u) ( x + (deltaT/6) * ( k1(t,x,u) + 2*k2(t,x,u) + 2*k3(t,x,u) + k4(
 
 % In MPC, compare NMPC w/ Koopman-based MPC
 % Example with Dubin's
-%% ************************** Basis functions *****************************
-
-basisFunction = 'rbf';
-
-% RBF centers
-Nrbf = 200;                            % Radial basis function -- # of bases
-cent = rand(n,Nrbf)*2 - 1;
-rbf_type = 'thinplate'; 
-% Lifting mapping - RBFs + the state itself
-liftFun = @(xx)( [xx;rbf(xx,cent,rbf_type)] );
-Nlift = Nrbf + n;
-
 
 %% ************************** Collect data ********************************
 tic
 disp('Starting data collection')
-Nsim = 200;
-Ntraj = 1000;
 
 % Random forcing
 Ubig = 2*rand([Nsim Ntraj]) - 1;
 
-% Random initial conditions
-Xcurrent = (rand(n,Ntraj)*2 - 1);
+% Random initial heading
+Xcurrent = [zeros(2,Ntraj); rand(1,Ntraj)*heading_sample_range*2 - heading_sample_range];
+
 
 X = []; Y = []; U = [];
 for i = 1:Nsim
@@ -90,12 +109,12 @@ fprintf('Regression done, time = %1.2f s \n', toc);
 
 %% *********************** Predictor comparison ***************************
 
-Tmax = 7;
 Nsim = Tmax/deltaT;
-u_dt = @(i)((-1).^(round(i/30))); % control signal
+u_dt = @(i)((-1).^(round(i/250))); % control signal
+
+% u_dt = @(i)(1.);
 
 % Initial condition
-x0 = [0.5; 0.5; 0.1];
 x_true = x0;
 
 % Lifted initial condition
@@ -103,6 +122,7 @@ xlift = liftFun(x0);
 
 % Local linearization predictor at x0
 x = sym('x',[3;1]); u = sym('u',[1;1]);
+
 Ac_x0 = double(subs(jacobian(f_u(0,x,u),x),[x;u],[x0;0]));
 Bc_x0 = double(subs(jacobian(f_u(0,x,u),u),[x;u],[x0;0]));
 c_x0 = double(subs(f_u(0,x,u),[x;u],[x0;0])) - Ac_x0*x0 - Bc_x0*0;
@@ -120,12 +140,15 @@ Ad_0 = ABc(1:3,1:3); Bd_0 = ABc(1:3,3); cd_0 = ABc(1:3,4);
 X_loc_0 = x0;
 
 
+X_koop = [x0];
 % Simulate
 for i = 0:Nsim-1
-    % Koopman predictor
-    xlift = [xlift, Alift*xlift(:,end) + Blift*u_dt(i)]; % Lifted dynamics
+    x_tmp = [0; 0; X_koop(3,end)];
+    x_tmp_lift = liftFun(x_tmp);
+    delta_x_lift = Alift*x_tmp_lift + Blift*u_dt(i);
+    X_koop = [X_koop [X_koop(1:2,end)+delta_x_lift(1:2); delta_x_lift(3)]];
     
-    % True dynamics
+ % True dynamics
     x_true = [x_true, f_ud(0,x_true(:,end),u_dt(i)) ];
     
 %     % Local linearization predictor at x0
@@ -135,50 +158,40 @@ for i = 0:Nsim-1
     X_loc_0 = [X_loc_0, Ad_0*X_loc_0(:,end) + Bd_0*u_dt(i) + c_0];
     
 end
-x_koop = Clift * xlift; % Koopman predictions
-
+% x_koop = Clift * xlift; % Koopman predictions
+x_koop = X_koop;
 
 
 %% ****************************  Plots  ***********************************
-
 lw = 2;
 
-title('Koopman Approximation of Dubin A/C')
-figure; plot(x_true(1,:), x_true(2,:), 'k-', 'LineWidth', 1); hold on; grid on;
+figure;
+subplot(2,1,1);
+plot(x_true(1,:), x_true(2,:), 'k-', 'LineWidth', 1); hold on; grid on;
 plot(x_koop(1,:), x_koop(2,:), 'r--', 'LineWidth', lw);
 plot(X_loc_x0(1,:), X_loc_x0(2,:), 'g--', 'linewidth', lw);
 plot(X_loc_0(1,:), X_loc_0(2,:), 'b--', 'linewidth', lw);
-LEG = legend('True','Koopman','Local at $x_0$','Local at 0','location','northeast');
+LEG = legend('True','Koopman','Local at $x_0$','Local at 0','location','southeast');
 set(LEG,'interpreter','latex')
-xlim([-0.5,6]);
-ylim([0.3, 1]);
+title('Koopman Approximation of Dubin A/C North/East') 
+xlim([0.9*min(x_true(1,:)),1.1*max(x_true(1,:))]);
+ylim([0.9*min(x_true(2,:)), 1.1*max(x_true(2,:))]);
 
-% figure
-% plot([0:Nsim-1]*deltaT,u_dt(0:Nsim-1),'linewidth',lw); hold on
-% title('Control input $u$', 'interpreter','latex'); xlabel('Time [s]','interpreter','latex');
-% set(gca,'fontsize',20)
-% 
-% figure
-% plot([0:Nsim]*deltaT,x_true(2,:),'linewidth',lw); hold on
-% plot([0:Nsim]*deltaT,x_koop(2,:), '--r','linewidth',lw)
-% plot([0:Nsim]*deltaT,X_loc_x0(2,:), '--g','linewidth',lw-1)
-% plot([0:Nsim]*deltaT,X_loc_0(2,:), '--k','linewidth',lw-1)
-% axis([0 Tmax min(x_koop(2,:))-0.15 max(x_koop(2,:))+0.15])
-% title('Predictor comparison - $x_2$','interpreter','latex'); xlabel('Time [s]','interpreter','latex');
-% set(gca,'fontsize',20)
-% LEG = legend('True','Koopman','Local at $x_0$','Local at 0','location','southwest');
-% set(LEG,'interpreter','latex')
-% 
-% figure
-% plot([0:Nsim]*deltaT,x_true(1,:),'linewidth',lw); hold on
-% plot([0:Nsim]*deltaT,x_koop(1,:), '--r','linewidth',lw)
-% plot([0:Nsim]*deltaT,X_loc_x0(1,:), '--g','linewidth',lw-1)
-% plot([0:Nsim]*deltaT,X_loc_0(1,:), '--k','linewidth',lw-1)
-% axis([0 Tmax min(x_koop(1,:))-0.1 max(x_koop(1,:))+0.1])
-% title('Predictor comparison - $x_1$','interpreter','latex'); xlabel('Time [s]','interpreter','latex');
-% set(gca,'fontsize',20)
-% LEG = legend('True','Koopman','Local at $x_0$','Local at 0','location','southwest');
-% set(LEG,'interpreter','latex')
+subplot(2,1,2);
+lw = 1;
+k_err = x_koop(3,:) - x_true(3,:);
+plot(x_koop(3,:) - x_true(3,:), 'k-', 'LineWidth', lw); hold on; grid on;
+plot(X_loc_x0(3,:) - x_true(3,:), 'g--', 'LineWidth', lw); 
+plot(X_loc_0(3,:) - x_true(3,:), 'b--', 'LineWidth', lw); 
+LEG = legend('Koopman','Local at $x_0$','Local at 0','location','southeast');
+set(LEG,'interpreter','latex')
+title('Heading Angle Errors') 
+ylim([1.1*min(k_err), 1.1*max(k_err)]);
 
-
-
+figure;
+k_pos_error = vecnorm(x_true(1:2,:) - x_koop(1:2,:)); hold on; grid on;
+kerr_sum = cumsum(k_pos_error);
+plot(kerr_sum, 'k', 'LineWidth',2);
+xlabel('Step')
+ylabel('Cumulative Error');
+title('Koopman Approximation Cumulative Position Error') 
