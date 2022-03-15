@@ -180,23 +180,20 @@ ylim([0.3, 1]);
 % disp('Press any key for model predictive control')
 % pause
 
-Tmax = 10; % Simlation length (seconds
+Tmax = 5; % Simlation length (seconds)
 Nsim = Tmax/deltaT;
-REF = 'line'; 
+REF = 'circle'; 
 switch REF
-    case 'cos'  % delete this later...
-        ymin = -0.4;
-        ymax = 0.4;
-        x0 = [-0.1;0.1];
-        yrr = 0.5*cos(2*pi*[1:Nsim] / Nsim); % reference
     case 'circle'
         radius = 3;
-        yrr = radius * cos(2*pi*[1:Nsim]/Nsim/4);  % y ref
-        xrr = radius * sin(2*pi*[1:Nsim]/Nsim/4);  % x ref
+        dist = v*deltaT*Nsim / (2*pi*radius);
+        
+        yrr = radius * cos(2*pi*dist*[1:Nsim]/Nsim);  % y ref
+        xrr = radius * sin(2*pi*dist*[1:Nsim]/Nsim);  % x ref
         ref_traj = [xrr; yrr; 0*[1:Nsim]];
         u_min = -0.5;  % control lower bound
         u_max = 0.5;  % control upper bound
-        x0 = [3.5; 0.0; 0.0];
+        x0 = [0.0; 3.5; 0.0];  % initial state
     case 'line'
         radius = 3;
         yrr = 0*[1:Nsim];  % y ref
@@ -204,7 +201,7 @@ switch REF
         ref_traj = [xrr; yrr; 0*[1:Nsim]];
         u_min = -0.5;  % control lower bound
         u_max = 0.5;  % control upper bound
-        x0 = [0.0; 2.0; 0.2];
+        x0 = [0.0; 2.0; 0.2];  % initial state
 end
 
 
@@ -283,8 +280,7 @@ if(isempty(ind_inf))
     ind_inf = Nsim;
 end
 
-%%%%%%%%%%%%%%%% MPC Plots %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
+%% ************************** MPC Plots **********************************
 figure; title('Koopman Approximation of Dubin A/C')
 plot(ref_traj(1,:), ref_traj(2,:), 'k--', 'LineWidth', lw); hold on; grid on;
 plot(XX_koop(1,:), XX_koop(2,:), 'g-', 'LineWidth', lw); 
