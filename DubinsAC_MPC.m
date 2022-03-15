@@ -18,61 +18,51 @@ m = 1; % number of control inputs
 
 %% ************************** Discretization ******************************
 
-deltaT = 0.01;  % step time, sec
+deltaT = 0.1;  % step time, sec
 
 %Runge-Kutta 4
 k1 = @(t,x,u) (  f_u(t,x,u) );
 k2 = @(t,x,u) ( f_u(t,x + k1(t,x,u)*deltaT/2,u) );
 k3 = @(t,x,u) ( f_u(t,x + k2(t,x,u)*deltaT/2,u) );
-k4 = @(t,x,u) ( f_u(t,x + k3(t,x,u)*deltaT,u) );        % k1 should be k3
+k4 = @(t,x,u) ( f_u(t,x + k3(t,x,u)*deltaT,u) );
 f_ud = @(t,x,u) ( x + (deltaT/6) * ( k1(t,x,u) + 2*k2(t,x,u) + 2*k3(t,x,u) + k4(t,x,u)  )   );
 
-% In MPC, compare NMPC w/ Koopman-based MPC
+
 %% ************************** Basis functions *****************************
 
 basisFunction = 'rbf';
 % RBF centers
 Nrbf = 200;                            % Radial basis function -- # of bases
 cent = rand(n,Nrbf)*2 - 1;
-rbf_type = 'thinplate'; 
+rbf_type = 'invquad'; % thinplate
 % Lifting mapping - RBFs + the state itself
-liftFun = @(xx)( [xx;rbf(xx,cent,rbf_type)] );
-Nlift = Nrbf + n;
+liftFun = @(xx)( [xx;rbf(xx,cent,rbf_type);cos(xx(3,:));sin(xx(3,:))] );
+Nlift = Nrbf + n + 2;
 
 
 %% ************************** Collect data ********************************
 tic
 disp('Starting data collection')
 Nsim = 200;
-Ntraj = 1000;
+Ntraj = 5000;
 
 % Random forcing
 Ubig = 2*rand([Nsim Ntraj]) - 1;
 
 % Random initial conditions
-Xcurrent = (rand(n,Ntraj)*2 - 1);
+% Xcurrent = (rand(n,Ntraj)*2 - 1);
+heading_sample_range = 2;     % +/- this range
+Xcurrent = [rand(2,Ntraj)*2 - 1; rand(1,Ntraj)*heading_sample_range*2 - heading_sample_range];
 X = []; Y = []; U = [];
 
 for i = 1:Nsim
-    Xnext = f_ud(0,Xcurrent,Ubig(i,:));
+    Xnext = f_ud(0, Xcurrent, Ubig(i,:));
     X = [X Xcurrent];
     Y = [Y Xnext];
     U = [U Ubig(i,:)];
     Xcurrent = Xnext;
 end
 
-% n_zeta = (nD+1)*ny + nD*m; % dimension of the delay-embedded "state"
-% for i = 1:Nsim
-%     Xnext = f_ud(0,Xcurrent,Ubig(i,:));
-%     zeta_prev = zeta_current;
-%     zeta_current = [[Cy*Xnext ; Ubig(i,:)] ; zeta_current( 1:end-ny-m , : ) ];
-%     if(i > nD)
-%         X = [X zeta_prev];
-%         Y = [Y zeta_current];
-%         U = [U Ubig(i,:)];
-%     end
-%     Xcurrent = Xnext;
-% end
 fprintf('Data collection DONE, time = %1.2f s \n', toc);
 
 
@@ -105,7 +95,7 @@ fprintf('Regression done, time = %1.2f s \n', toc);
 
 Tmax = 7;
 Nsim = Tmax/deltaT;
-u_dt = @(i)((-1).^(round(i/30))); % control signal
+u_dt = @(i)((-1).^(round(i/3))); % control signal
 
 % Initial condition
 x0 = [0.5; 0.5; 0.1];
@@ -132,17 +122,6 @@ ABc = expm([Ac_0 [Bc_0 c_0] ; zeros(2,5)]*deltaT); % discretize
 Ad_0 = ABc(1:3,1:3); Bd_0 = ABc(1:3,3); cd_0 = ABc(1:3,4); 
 X_loc_0 = x0;
 
-% Delayed initial condition (assume random control input in the past)
-% x = x0;
-% xstart = [Cy*x ; NaN(nD*(ny+m),1)];
-% for i = 1:nD
-%     urand = 2*rand(m,1) - 1;
-%     xp = f_ud(0,x,urand);
-%     xstart = [Cy*xp ; urand; xstart(1:end-ny-m)];
-%     x = xp;
-% end
-% xlift = liftFun(xstart);
-
 
 % Simulate
 for i = 0:Nsim-1
@@ -153,9 +132,13 @@ for i = 0:Nsim-1
     x_true = [x_true, f_ud(0,x_true(:,end),u_dt(i)) ];
     
     % Local linearization predictor at x0
-    X_loc_x0 = [X_loc_x0, Ad_x0*X_loc_x0(:,end) + Bd_x0*u_dt(i) + cd_x0];     
+    X_loc_x0 = [X_loc_x0, Ad_x0*X_loc_x0(:,end) + Bd_x0*u_dt(i) + cd_x0];
+
+    % Fix this before demo!!! Linearize at each step, like in MPC
+
+
     % Local linearization predictor at 0
-    X_loc_0 = [X_loc_0, Ad_0*X_loc_0(:,end) + Bd_0*u_dt(i) + c_0];
+    X_loc_0 = [X_loc_0, Ad_0*X_loc_0(:,end) + Bd_0*u_dt(i) + c_0]; % probably remove this
     
 end
 x_koop = Clift * xlift; % Koopman predictions Clift(1,:)
@@ -180,9 +163,9 @@ ylim([0.3, 1]);
 % disp('Press any key for model predictive control')
 % pause
 
-Tmax = 5; % Simlation length (seconds)
+Tmax = 10; % Simlation length (seconds)
 Nsim = Tmax/deltaT;
-REF = 'circle'; 
+REF = 'line'; 
 switch REF
     case 'circle'
         radius = 3;
@@ -201,7 +184,7 @@ switch REF
         ref_traj = [xrr; yrr; 0*[1:Nsim]];
         u_min = -0.5;  % control lower bound
         u_max = 0.5;  % control upper bound
-        x0 = [0.0; 2.0; 0.2];  % initial state
+        x0 = [0.0; 2.0; 0.0];  % initial state
 end
 
 
@@ -209,8 +192,7 @@ end
 C = zeros(1,Nlift); C(1) = 1; C(2) = 1; C(3) = 0;  % define J wrt position
 C = diag(C);
 % Weight matrices
-Q = diag([1,1,0]);  % state cost
-%Q = 1;
+Q = diag([1,1,0]);  % state cost [x,y,heading]
 R = 0.01;  % control cost
 % Prediction horizon
 Tpred = 1;  % MPC horizon (sec)
@@ -223,9 +205,11 @@ xlift_max = [nan(Nlift,1)];
 % Build Koopman MPC controller
 koopmanMPC  = getMPC(Alift,Blift,Clift,0,Q,R,Q,Np, u_min, u_max, xlift_min, xlift_max,'qpoases');
 
-x_koop = x0; x_loc = x0;
+x_koop = x0; x_loc = x0; x_koop_PI = x0;
 XX_koop = x0; UU_koop = [];
+XX_koop_PI = x0; UU_koop_PI = [];
 XX_loc = x0; UU_loc = [];
+time_koop = []; time_loc = [];
 
 % Get Jacobian of the true dynamics (for local linearization MPC)
 x = sym('x',[3 1]); syms u;
@@ -250,12 +234,27 @@ for i = 0:Nsim-1
     % Current value of the reference signal
     yr = ref_traj(:,i+1);
     
-    % Koopman MPC
+    tic
+    % Koopman MPC - Position variant
     xlift = liftFun(x_koop); % Lift
     u_koop = koopmanMPC(xlift,yr); % Get control input
     x_koop = f_ud(0,x_koop,u_koop); % Update true state
+    time_koop = [time_koop toc];
+
+%     % Koopman MPC -- Approximately Position Invariant
+%     x_tmp = x_koop_PI;
+%     x_tmp(1) = 0;
+%     x_tmp(2) = 0;
+%     yr_tmp = yr;
+%     yr_tmp(1) = yr(1) - x_koop_PI(1);
+%     yr_tmp(2) = yr(2) - x_koop_PI(2);
+%     xlift_PI = liftFun(x_tmp);
+%     u_koop_PI = koopmanMPC(xlift_PI,yr_tmp); % Get control input
+%     x_koop_PI = f_ud(0,x_koop_PI,u_koop_PI); % Update true state
+
     
     % Local linearization MPC
+    tic
     Aloc = double(subs(Jx,[x;u],[x_loc;u_loc])); % Get local linearization
     Bloc = double(subs(Ju,[x;u],[x_loc;u_loc]));
     cloc = double(subs(f_ud_sym,[x;u],[x_loc;u_loc])) - Aloc*x_loc - Bloc*u_loc;
@@ -266,14 +265,15 @@ for i = 0:Nsim-1
         wasinfeas = 1;
     end
     x_loc = f_ud(0,x_loc,u_loc); % Update true state
-    
-    % Nonlinear MPC
-    
+    time_loc = [time_loc toc];
+        
     % Store values
     XX_koop = [XX_koop x_koop];
     UU_koop = [UU_koop u_koop];
     XX_loc = [XX_loc x_loc];
     UU_loc = [UU_loc u_loc];
+%     XX_koop_PI = [XX_koop_PI x_koop_PI];
+%     UU_koop_PI = [UU_koop_PI u_koop_PI];
 end
 
 if(isempty(ind_inf))
@@ -283,9 +283,14 @@ end
 %% ************************** MPC Plots **********************************
 figure; title('Koopman Approximation of Dubin A/C')
 plot(ref_traj(1,:), ref_traj(2,:), 'k--', 'LineWidth', lw); hold on; grid on;
-plot(XX_koop(1,:), XX_koop(2,:), 'g-', 'LineWidth', lw); 
+plot(XX_koop(1,:), XX_koop(2,:), 'g-', 'LineWidth', lw);
+% plot(XX_koop_PI(1,:), XX_koop_PI(2,:), 'b--', 'LineWidth', lw); 
 plot(XX_loc(1,:), XX_loc(2,:), 'r--', 'LineWidth', lw);
 LEG = legend('ref','Koopman','Local at $x_0$','location','northeast');
 set(LEG,'interpreter','latex')
-% xlim([-0.5,6]);
-% ylim([0.3, 1]);
+
+figure; title('Solve Times')
+plot(time_koop(:), 'g-');hold on; grid on;
+plot(time_loc(:), 'r--')
+LEG = legend('Koopman','Local at $x_0$','location','northeast');
+set(LEG,'interpreter','latex')
