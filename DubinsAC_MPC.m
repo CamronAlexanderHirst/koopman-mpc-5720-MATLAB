@@ -4,14 +4,72 @@ addpath('./Resources')
 addpath('./Resources/qpOASES-3.1.0/interfaces/matlab') 
 rng(2141444)
 
+% Introduction:
+% In this demo, we experiment with using the Koopman operator dynamics
+% model of the aircraft for path-following control. We begin similarly to
+% the DubinsAC.m demo, defining the dynamics, basis functions, and fitting
+% an approximation of the Koopman operator. The Koopman operator is then
+% used for model predictive control. Users can experiment with parameters
+% regarding data collection, Koopman operator, and the MPC itself.
+% Comparisons to a local linearization are presented.
+% 
+% !!! Note: due to the formulation of the MPC code, we must regress the
+% position dependent dynamics. Future work would implement the position
+% invariant model for MPC, but this would require a fairly significant
+% re-write of the MPC code. Without the encoded model bias, we require more 
+% data and basis functions to regress a decent model !!!
+
+%% *************************** Exercises *******************************
+
+% Data gathering params
+Nsim = 500;  % number of data-gathering simulations
+Ntraj = 500;  % number of steps in each data-gathering simulation
+
+% Open-loop sim params:
+T_max_pred = 5;  % Open-loop prediction simulation time (seconds)
+
+% Closed-loop sim params:
+Tpred = 1;  % MPC horizon (sec)
+Tmax = 10;  % MPC closed-loop simlation time (seconds)
+REF = 'line';  % Path-following reference ('line' or 'circle')
+control_limits = 1;  % +- heading rate control constraint (rad/sec)
+
+% Can also change the basis parameters like in DubinsAC.m!
+
+% Questions:
+
+% 0. Write down or save off all defaults. Initialize each question with the
+% default parameters, then follow instructions.
+
+% 1. Run the code. Look at the open-loop predictions in this example. Why 
+% are the Koopman predictions worse than in DubinsAC.m? Why does MPC still
+% kind of work?
+
+% 2. Increase the MPC horizon. How does this change performance? Why?
+
+% 3. Half Ntraj, then double it.How does changing the data gathering 
+% parameters affect open-loop predictions? Closed-loop MPC performance?
+
+% 4. How do solve times compare between Local linearized and Koopman MPC?
+% Why the discrepancy?
+
+% 5. Change the path-following reference to 'circle'. Why the discrepancy
+% in the change in performance?
+
+% 6. Change the control limits to a different number between 0-2. Why the
+% change in performance?
+
+% 7. Other things to try: mess with the basis functions. try commenting
+% lines 99 thru 101 and uncommenting lines 103 thru 105. Look at the
+% difference between these lifting functions. Why the change in
+% performance?
+
 
 %% *************************** Dynamics ***********************************
 
 v = 1.;  % assumed constant velocity
-
 % Assume zero control input
 f_u =  @(t,x,u)([ v*cos(x(3,:)) ; v*sin(x(3,:)) ; u ] );
-
 X0 = [0.; 0.; 0.];
 n = 3; % number of states
 m = 1; % number of control inputs
@@ -19,7 +77,6 @@ m = 1; % number of control inputs
 %% ************************** Discretization ******************************
 
 deltaT = 0.1;  % step time, sec
-
 %Runge-Kutta 4
 k1 = @(t,x,u) (  f_u(t,x,u) );
 k2 = @(t,x,u) ( f_u(t,x + k1(t,x,u)*deltaT/2,u) );
@@ -30,27 +87,37 @@ f_ud = @(t,x,u) ( x + (deltaT/6) * ( k1(t,x,u) + 2*k2(t,x,u) + 2*k3(t,x,u) + k4(
 
 %% ************************** Basis functions *****************************
 
-basisFunction = 'rbf';
-% RBF centers
-Nrbf = 200;                            % Radial basis function -- # of bases
-cent = rand(n,Nrbf)*2 - 1;
-rbf_type = 'invquad'; % thinplate
+% Basis Function Definitions
+n = 3;                                % Dimension of system (do not change)
+% RBF 1 Centers
+Nrbf = 100;                             % # of basis functions
+cent = rand(n,Nrbf)*2 - 1;    % centers of each function
+rbf_type = 'invquad'; 
+
+% RBF 2 Centers
+Nrbf2 = 0;                            % # of basis functions
+cent2 = rand(n,Nrbf2)*2 - 1;          % centers of each function
+rbf_type_2 = 'thinplate';             % type of function - one of 'thinplate', 'gauss', 'invquad', 'polyharmonic'
+
 % Lifting mapping - RBFs + the state itself
-liftFun = @(xx)( [xx;rbf(xx,cent,rbf_type);cos(xx(3,:));sin(xx(3,:))] );
-Nlift = Nrbf + n + 2;
+
+extra_param = 1;
+liftFun = @(xx)( [xx; rbf(xx,cent,rbf_type); rbf(xx, cent2,rbf_type_2, extra_param)]); 
+Nlift = (Nrbf + Nrbf2) + n;
+
+% extra_param = 1;
+% liftFun = @(xx)( [xx; rbf(xx,cent,rbf_type); rbf(xx, cent2,rbf_type_2, extra_param); cos(xx(3,:)) ; sin(xx(3,:))]); 
+% Nlift = (Nrbf + Nrbf2) + n + 2;
 
 
 %% ************************** Collect data ********************************
 tic
 disp('Starting data collection')
-Nsim = 200;
-Ntraj = 5000;
 
 % Random forcing
 Ubig = 2*rand([Nsim Ntraj]) - 1;
 
 % Random initial conditions
-% Xcurrent = (rand(n,Ntraj)*2 - 1);
 heading_sample_range = 2;     % +/- this range
 Xcurrent = [rand(2,Ntraj)*2 - 1; rand(1,Ntraj)*heading_sample_range*2 - heading_sample_range];
 X = []; Y = []; U = [];
@@ -68,17 +135,16 @@ fprintf('Data collection DONE, time = %1.2f s \n', toc);
 
 %% ******************************* Lift ***********************************
 
-disp('Starting LIFTING')
+disp('Starting LIFTING of dataset')
 tic
 Xlift = liftFun(X);
 Ylift = liftFun(Y);
-fprintf('Lifting DONE, time = %1.2f s \n', toc);
+fprintf('Lifting dataset DONE, time = %1.2f s \n', toc);
 
 %% ********************** Build predictor *********************************
 
 disp('Starting REGRESSION')
 tic
-
 
 W = [Ylift ; X];
 V = [Xlift; U];
@@ -93,8 +159,7 @@ fprintf('Regression done, time = %1.2f s \n', toc);
 
 %% *********************** Predictor comparison ***************************
 
-Tmax = 7;
-Nsim = Tmax/deltaT;
+Nsim = T_max_pred/deltaT;
 u_dt = @(i)((-1).^(round(i/3))); % control signal
 
 % Initial condition
@@ -125,7 +190,7 @@ X_loc_0 = x0;
 
 % Simulate
 for i = 0:Nsim-1
-    % Koopman predictor
+    % Position-Variant Koopman Predictor
     xlift = [xlift, Alift*xlift(:,end) + Blift*u_dt(i)]; % Lifted dynamics
     
     % True dynamics
@@ -133,9 +198,6 @@ for i = 0:Nsim-1
     
     % Local linearization predictor at x0
     X_loc_x0 = [X_loc_x0, Ad_x0*X_loc_x0(:,end) + Bd_x0*u_dt(i) + cd_x0];
-
-    % Fix this before demo!!! Linearize at each step, like in MPC
-
 
     % Local linearization predictor at 0
     X_loc_0 = [X_loc_0, Ad_0*X_loc_0(:,end) + Bd_0*u_dt(i) + c_0]; % probably remove this
@@ -158,33 +220,31 @@ LEG = legend('True','Koopman','Local at $x_0$','Local at 0','location','northeas
 set(LEG,'interpreter','latex')
 xlim([-0.5,6]);
 ylim([0.3, 1]);
+xlabel('x');
+ylabel('y');
 
 %% ********************* Model Predictive Control *************************
-% disp('Press any key for model predictive control')
-% pause
 
-Tmax = 10; % Simlation length (seconds)
+
 Nsim = Tmax/deltaT;
-REF = 'line'; 
 switch REF
     case 'circle'
-        radius = 3;
+        radius = 10;
         dist = v*deltaT*Nsim / (2*pi*radius);
         
-        yrr = radius * cos(2*pi*dist*[1:Nsim]/Nsim);  % y ref
+        yrr = radius * cos(2*pi*dist*[1:Nsim]/Nsim) - radius;  % y ref
         xrr = radius * sin(2*pi*dist*[1:Nsim]/Nsim);  % x ref
         ref_traj = [xrr; yrr; 0*[1:Nsim]];
-        u_min = -0.5;  % control lower bound
-        u_max = 0.5;  % control upper bound
-        x0 = [0.0; 3.5; 0.0];  % initial state
+        u_min = -1 * control_limits;  % control lower bound
+        u_max = control_limits;  % control upper bound
+        x0 = [0.0; 0.5; 0.0];  % initial state
     case 'line'
-        radius = 3;
         yrr = 0*[1:Nsim];  % y ref
-        xrr = v*deltaT*[1:Nsim];  % x ref
+        xrr = v*deltaT*[1:Nsim] - 1;  % x ref
         ref_traj = [xrr; yrr; 0*[1:Nsim]];
-        u_min = -0.5;  % control lower bound
-        u_max = 0.5;  % control upper bound
-        x0 = [0.0; 2.0; 0.0];  % initial state
+        u_min = -1 * control_limits;  % control lower bound
+        u_max = control_limits;  % control upper bound
+        x0 = [-1.0; 2.0; 0.0];  % initial state
 end
 
 
@@ -195,7 +255,6 @@ C = diag(C);
 Q = diag([1,1,0]);  % state cost [x,y,heading]
 R = 0.01;  % control cost
 % Prediction horizon
-Tpred = 1;  % MPC horizon (sec)
 Np = round(Tpred / deltaT);  % number of knots in MPC horizon
 
 % Constraints
@@ -241,17 +300,6 @@ for i = 0:Nsim-1
     x_koop = f_ud(0,x_koop,u_koop); % Update true state
     time_koop = [time_koop toc];
 
-%     % Koopman MPC -- Approximately Position Invariant
-%     x_tmp = x_koop_PI;
-%     x_tmp(1) = 0;
-%     x_tmp(2) = 0;
-%     yr_tmp = yr;
-%     yr_tmp(1) = yr(1) - x_koop_PI(1);
-%     yr_tmp(2) = yr(2) - x_koop_PI(2);
-%     xlift_PI = liftFun(x_tmp);
-%     u_koop_PI = koopmanMPC(xlift_PI,yr_tmp); % Get control input
-%     x_koop_PI = f_ud(0,x_koop_PI,u_koop_PI); % Update true state
-
     
     % Local linearization MPC
     tic
@@ -272,8 +320,6 @@ for i = 0:Nsim-1
     UU_koop = [UU_koop u_koop];
     XX_loc = [XX_loc x_loc];
     UU_loc = [UU_loc u_loc];
-%     XX_koop_PI = [XX_koop_PI x_koop_PI];
-%     UU_koop_PI = [UU_koop_PI u_koop_PI];
 end
 
 if(isempty(ind_inf))
@@ -284,13 +330,16 @@ end
 figure; title('Koopman Approximation of Dubin A/C')
 plot(ref_traj(1,:), ref_traj(2,:), 'k--', 'LineWidth', lw); hold on; grid on;
 plot(XX_koop(1,:), XX_koop(2,:), 'g-', 'LineWidth', lw);
-% plot(XX_koop_PI(1,:), XX_koop_PI(2,:), 'b--', 'LineWidth', lw); 
 plot(XX_loc(1,:), XX_loc(2,:), 'r--', 'LineWidth', lw);
 LEG = legend('ref','Koopman','Local at $x_0$','location','northeast');
-set(LEG,'interpreter','latex')
+set(LEG,'interpreter','latex');
+xlabel('x');
+ylabel('y');
 
 figure; title('Solve Times')
-plot(time_koop(:), 'g-');hold on; grid on;
-plot(time_loc(:), 'r--')
+plot(time_koop(:), 'g-', 'LineWidth', lw);hold on; grid on;
+plot(time_loc(:), 'r--', 'Linewidth', lw)
 LEG = legend('Koopman','Local at $x_0$','location','northeast');
 set(LEG,'interpreter','latex')
+xlabel('simulation step');
+ylabel('Solve Time (s)')

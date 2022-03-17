@@ -21,8 +21,7 @@ k3 = @(t,x,u) ( f_u(t,x + k2(t,x,u)*deltaT/2,u) );
 k4 = @(t,x,u) ( f_u(t,x + k3(t,x,u)*deltaT,u) );        % k1 should be k3
 f_ud = @(t,x,u) ( x + (deltaT/6) * ( k1(t,x,u) + 2*k2(t,x,u) + 2*k3(t,x,u) + k4(t,x,u)  )   );
 
-% In MPC, compare NMPC w/ Koopman-based MPC
-% Example with Dubin's
+
 %% ************************** Basis functions *****************************
 
 basisFunction = 'rbf';

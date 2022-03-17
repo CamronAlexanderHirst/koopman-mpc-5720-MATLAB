@@ -21,7 +21,7 @@ deltaT = 0.01;
 k1 = @(t,x,u) (  f_u(t,x,u) );
 k2 = @(t,x,u) ( f_u(t,x + k1(t,x,u)*deltaT/2,u) );
 k3 = @(t,x,u) ( f_u(t,x + k2(t,x,u)*deltaT/2,u) );
-k4 = @(t,x,u) ( f_u(t,x + k1(t,x,u)*deltaT,u) );
+k4 = @(t,x,u) ( f_u(t,x + k3(t,x,u)*deltaT,u) ); % k1 should be k3
 f_ud = @(t,x,u) ( x + (deltaT/6) * ( k1(t,x,u) + 2*k2(t,x,u) + 2*k3(t,x,u) + k4(t,x,u)  )   );
 
 
@@ -160,8 +160,8 @@ axis([0 1 -1.3 0.5])
 
 
 %% ********************** Feedback control ********************************
-disp('Press any key for feedback control')
-pause
+% disp('Press any key for feedback control')
+% pause
 
 Tmax = 3; % Simlation legth
 Nsim = Tmax/deltaT;
@@ -248,6 +248,8 @@ for i = 0:Nsim-1
         wasinfeas = 1;
     end
     x_loc = f_ud(0,x_loc,u_loc); % Update true state
+    
+    % Nonlinear MPC
     
     % Store values
     XX_koop = [XX_koop x_koop];
