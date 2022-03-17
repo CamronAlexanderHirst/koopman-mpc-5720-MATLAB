@@ -8,17 +8,14 @@ rng(2141444)
 % are located at the top of the script with descriptions.
 
 %%% Challenges %%%
-% The current linearization uses 1000 datapoints and 40 inverse quadratic
+% The current linearization uses 1000 datapoints and 4 
 % basis fucntions. The challenge is to use a combination of inverse
 % quadratic and thin plate basis functions to get a "good" linearization
-% with fewer than 40 basis functions and as little data as possible. 
+% with as little data as possible. 
 
-% 1. Can you adjust the mixture of basis functions to get a similar
-% prediction quality as the original 45 (Lines 52 and 57)? You may need 
+% 1. Can you adjust the mixture of basis functions to improve the
+% prediction quality (Lines 52 and 57)? You may need 
 % more data points to accomplish this (Lines 42-43). 
-%
-% Even though linear systems are easier to work with, we still want to
-% minimize the number of lifting operations and the size of the matrices.
 
 % 2. Increase the predicition horizon (Tmax Line 68) - how far out is the 
 % Koopman approximation good? Can you get arbitrarily close prediction? 
@@ -50,12 +47,12 @@ heading_sample_range = pi;     % +/- this range
 n = 3;                                % Dimension of system (do not change)
 
 % RBF 1 Centers
-Nrbf = 40;                             % # of basis functions
+Nrbf = 2;                             % # of basis functions
 cent = rand(n,Nrbf)*2 - 1;            % centers of each function
 rbf_type = 'invquad'; 
 
 % RBF 2 Centers
-Nrbf2 = 5;                            % # of basis functions
+Nrbf2 = 2;                            % # of basis functions
 cent2 = rand(n,Nrbf2)*2 - 1;          % centers of each function
 rbf_type_2 = 'thinplate';             % type of function - one of 'thinplate', 'gauss', 'invquad', 'polyharmonic'
 
