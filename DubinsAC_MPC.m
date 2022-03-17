@@ -29,7 +29,7 @@ Ntraj = 500;  % number of steps in each data-gathering simulation
 T_max_pred = 5;  % Open-loop prediction simulation time (seconds)
 
 % Closed-loop sim params:
-Tpred = 1;  % MPC horizon (sec)
+Tpred = 3;  % MPC horizon (sec)
 Tmax = 10;  % MPC closed-loop simlation time (seconds)
 REF = 'line';  % Path-following reference ('line' or 'circle')
 control_limits = 1;  % +- heading rate control constraint (rad/sec)
@@ -45,7 +45,8 @@ control_limits = 1;  % +- heading rate control constraint (rad/sec)
 % are the Koopman predictions worse than in DubinsAC.m? Why does MPC still
 % kind of work?
 
-% 2. Increase the MPC horizon. How does this change performance? Why?
+% 2. Increase the MPC horizon (i.e. 5 sec). Decrease the MPC horizon i.e. 
+% (1 sec) How does this change performance? Why?
 
 % 3. Half Ntraj, then double it.How does changing the data gathering 
 % parameters affect open-loop predictions? Closed-loop MPC performance?
@@ -56,7 +57,7 @@ control_limits = 1;  % +- heading rate control constraint (rad/sec)
 % 5. Change the path-following reference to 'circle'. Why the discrepancy
 % in the change in performance?
 
-% 6. Change the control limits to a different number between 0-2. Why the
+% 6. Change the control limits to a different value between 0-2. Why the
 % change in performance?
 
 % 7. Other things to try: mess with the basis functions. try commenting
@@ -345,3 +346,12 @@ set(LEG,'interpreter','latex')
 xlabel('simulation step');
 ylabel('Solve Time (s)');
 title('MPC Solve Times');
+
+figure;
+plot(UU_koop(:), 'g-', 'LineWidth', lw);hold on; grid on;
+plot(UU_loc(:), 'r--', 'Linewidth', lw)
+LEG = legend('Koopman','Local at $x_0$','location','northeast');
+set(LEG,'interpreter','latex')
+xlabel('simulation step');
+ylabel('Yaw Rate Control Signal');
+title('MPC Control Signal');
