@@ -138,6 +138,7 @@ lw = 4;
 figure
 plot([0:Nsim-1]*deltaT,u_dt(0:Nsim-1),'linewidth',lw); hold on
 title('Control input $u$', 'interpreter','latex'); xlabel('Time [s]','interpreter','latex');
+ylabel('$u$','interpreter','latex');
 set(gca,'fontsize',20)
 
 figure
@@ -147,6 +148,7 @@ plot([0:Nsim]*deltaT,X_loc_x0(2,:), '--g','linewidth',lw-1)
 plot([0:Nsim]*deltaT,X_loc_0(2,:), '--k','linewidth',lw-1)
 axis([0 Tmax min(x_koop(2,:))-0.15 max(x_koop(2,:))+0.15])
 title('Predictor comparison - $x_2$','interpreter','latex'); xlabel('Time [s]','interpreter','latex');
+ylabel('$x_2$','interpreter','latex');
 set(gca,'fontsize',20)
 LEG = legend('True','Koopman','Local at $x_0$','Local at 0','location','southwest');
 set(LEG,'interpreter','latex')
@@ -158,6 +160,7 @@ plot([0:Nsim]*deltaT,X_loc_x0(1,:), '--g','linewidth',lw-1)
 plot([0:Nsim]*deltaT,X_loc_0(1,:), '--k','linewidth',lw-1)
 axis([0 Tmax min(x_koop(1,:))-0.1 max(x_koop(1,:))+0.1])
 title('Predictor comparison - $x_1$','interpreter','latex'); xlabel('Time [s]','interpreter','latex');
+ylabel('$x_1$','interpreter','latex');
 set(gca,'fontsize',20)
 LEG = legend('True','Koopman','Local at $x_0$','Local at 0','location','southwest');
 set(LEG,'interpreter','latex')

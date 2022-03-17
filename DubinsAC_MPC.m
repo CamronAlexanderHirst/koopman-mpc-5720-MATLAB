@@ -210,8 +210,7 @@ x_koop = Clift * xlift; % Koopman predictions Clift(1,:)
 %% ****************************  Predictor Plots  *************************
 
 lw = 2;
-figure
-title('Koopman Approximation of Dubin A/C')
+figure;
 plot(x_true(1,:), x_true(2,:), 'k-', 'LineWidth', 1); hold on; grid on;
 plot(x_koop(1,:), x_koop(2,:), 'r--', 'LineWidth', lw);
 plot(X_loc_x0(1,:), X_loc_x0(2,:), 'g--', 'linewidth', lw);
@@ -222,6 +221,7 @@ xlim([-0.5,6]);
 ylim([0.3, 1]);
 xlabel('x');
 ylabel('y');
+title('Open-Loop Predictions of Dubin A/C Position');
 
 %% ********************* Model Predictive Control *************************
 
@@ -327,19 +327,21 @@ if(isempty(ind_inf))
 end
 
 %% ************************** MPC Plots **********************************
-figure; title('Koopman Approximation of Dubin A/C')
+figure; 
 plot(ref_traj(1,:), ref_traj(2,:), 'k--', 'LineWidth', lw); hold on; grid on;
 plot(XX_koop(1,:), XX_koop(2,:), 'g-', 'LineWidth', lw);
 plot(XX_loc(1,:), XX_loc(2,:), 'r--', 'LineWidth', lw);
-LEG = legend('ref','Koopman','Local at $x_0$','location','northeast');
+LEG = legend('Ref Path','Koopman','Local at $x_0$','location','northeast');
 set(LEG,'interpreter','latex');
 xlabel('x');
 ylabel('y');
+title('Closed-Loop Dubin A/C Path-Following MPC');
 
-figure; title('Solve Times')
+figure; 
 plot(time_koop(:), 'g-', 'LineWidth', lw);hold on; grid on;
 plot(time_loc(:), 'r--', 'Linewidth', lw)
 LEG = legend('Koopman','Local at $x_0$','location','northeast');
 set(LEG,'interpreter','latex')
 xlabel('simulation step');
-ylabel('Solve Time (s)')
+ylabel('Solve Time (s)');
+title('MPC Solve Times');
